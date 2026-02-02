@@ -1,0 +1,890 @@
+### Breast cancer dataset
+
+The breast cancer dataset
+from sklearn import datasets
+
+data = datasets.load_breast_cancer()
+
+print(data.keys())
+print('\n Features: \n', data.feature_names)
+print('\n Labels: ', data.target_names)
+In the code below we create the feature matrix `X` and `y` that are `numpy` arrays and scale the features using `StandardScaler`
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+
+X = StandardScaler().fit_transform(data.data)
+y = data.target
+
+print('Features dim: ', X.shape)
+print('Labels dim: ', y.shape)
+print('We have {} samples and {} features.'.format(X.shape[0],X.shape[1]))
+### Explore structure of the data
+
+**Task 1.1**: Use PCA to reduce the features to two dimensions and plot the reduced data highlighting the labels. To improve visualisation, make the points in the plots transparent by setting `alpha` to 0.5. Are there clear clusters in the data?
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+
+# Perform PCA
+pca = PCA(n_components = 2)
+X_pca = pca.fit_transform(X)
+
+# Plot reduced data
+plt.figure(figsize = (12,5))
+for i, target_label in enumerate(data.target_names):
+  plt.scatter(X_pca[y==i, 0], X_pca[y ==i, 1], label = target_label, alpha = 0.5)
+  # Adding titles and axis labels for the plot
+plt.title("PCA of Breast Cancer Dataset")
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+plt.show()
+
+
+__Answer:__ There are discernable clusters in the data although they are not completely seperate
+### Random forest classification
+
+**Task 1.2** Perform classification using Random Forest and calculate cross-validated accuracy. Extract and display the two most important features, including their names and importance values.
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_val_score
+
+# Fit and evaluate a random forest classifier
+classifier_rf = RandomForestClassifier(random_state = 42)
+
+# find cross val score
+cvscore = cross_val_score(classifier_rf, X, y, cv = 5, scoring = 'accuracy')
+
+# model fitting
+classifier_rf.fit(X, y)
+print('Cross-validated accuracy: {:.2f}%'.format(np.mean(cvscore)*100))
+
+# Identify and print the two most important features
+
+# Extract feature importances from the fitted Random Forest model
+importances = classifier_rf.feature_importances_
+
+# Get the indices of the two most important features
+important_indices = np.argsort(importances)[-2:]
+
+# Retrieve the names and importance values of these features
+important_features = data.feature_names[important_indices]
+important_importances = importances[important_indices]
+
+print("Important features:", important_features)
+print("Important feautres", important_importances)
+**Task 1.3** Visualise the results of the random forest classification. Perform following steps:
+* Perform PCA to reduce features to two dimensions
+* Calculate the 2D feature range for the reduced features
+* Predict the classification result for the 2D feature range and plot using `contourf`. *Hint: you will need to look up a method* `PCA.inverse_transform` *in sklearn help.*
+* Plot the reduced data with the labels highlighted on the same plot.
+# Transform features using PCA
+#pca = PCA(n_components = 2)
+#X_pca = pca.fit_transform(X)
+
+# Generate feature space
+x_min, x_max = X_pca[:, 0].min() - 1, X_pca[:, 0].max() + 1
+y_min, y_max = X_pca[:, 1].min() - 1, X_pca[:, 1].max() + 1
+xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1), np.arange(y_min, y_max, 0.1))
+
+grid = np.c_[xx.ravel(), yy.ravel()]
+
+# Predict and plot labels for the features space
+Z = classifier_rf.predict(pca.inverse_transform(np.c_[xx.ravel(), yy.ravel()]))
+Z = Z.reshape(xx.shape)
+plt.contourf(xx, yy, Z, alpha=0.4)
+
+# Plot reduced data
+plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y, s=20, edgecolor='k')
+plt.title("PCA of Breast Cancer Dataset")
+plt.show()
+
+
+### Feature selection
+
+**Task 1.4**: You are asked to develop a simple test for detection of breast cancer that could be used in clinical practice. The requirements are
+* There should be as few measurements as possible
+* The method for prediction of breast cancer should be as simple as possible.
+* Accuracy needs to be as high as possible.
+
+Using feature selection methods that were covered in the lectures find the smallest number of features for prediction while preserving the accuracy as much as possible. Develop a test by training a linear classifier. Display the results of the classification, including the decision boundary, to visually assess the test. Print out the names of the selected features.
+
+Decribe your new test and how you arrived at the solution. Explain why this new test is suitable. Keep your description brief.
+
+*Hint: When reducing number of features don't look for highest performance, but rather smallest number of features for which performance does not drop significantly*
+
+*Hint 2: For simplicity, you are allowed to use CV accuracy for evaluation and are not required to create the test set*
+from sklearn.datasets import load_breast_cancer
+from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import RFE
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Load the dataset
+data = load_breast_cancer()
+X = data.data
+y = data.target
+
+# Scale the features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Feature selection using Recursive Feature Elimination
+classifier_lr = LogisticRegression()
+selector = RFE(classifier_lr, n_features_to_select=2, step=1)
+selector = selector.fit(X_scaled, y)
+
+# Train the classifier with selected features
+X_selected = X_scaled[:, selector.support_]
+classifier_lr.fit(X_selected, y)
+
+# Cross-validated accuracy
+accuracy = cross_val_score(classifier_lr, X_selected, y, cv=5).mean()
+print(f"Cross-validated accuracy: {accuracy:.2f}")
+
+# plot decision boundary
+plt.figure(figsize = (10,6))
+plt.scatter(X_selected[:,0], X_selected[:,1], c = y, cmap = plt.cm.viridis, edgecolor = 'k', s = 20)
+
+# mesh for decision boundary
+x_min, x_max = X_selected[:, 0].min() - 1, X_selected[:, 0].max() + 1
+y_min, y_max = X_selected[:, 1].min() - 1, X_selected[:, 1].max() + 1
+xx, yy = np.meshgrid(np.linspace(x_min, x_max, 500), np.linspace(y_min, y_max, 500))
+
+# Predict for each point in the mesh
+Z = classifier_lr.predict(np.c_[xx.ravel(), yy.ravel()])
+Z = Z.reshape(xx.shape)
+
+plt.contourf(xx, yy, Z, alpha=0.8, cmap=plt.cm.viridis)
+plt.xlabel('Feature 1')
+plt.ylabel('Feature 2')
+plt.title('Decision Boundary with Selected Features')
+plt.show()
+
+# Print selected feature names
+select_feature_name = data.feature_names[selector.support_]
+print("Selected Features:", select_feature_name)
+
+__Answer:__ The new test for breast cancer detection utilises a logistic regression model with two key features which are, 'worst area' and 'worst concave points' which was selected through recursive feature elimination (RFE). This is a suitable way to test due to its simplicity and requires less measurements without compromising the cross-validated accuracy. This makes the test very efficient and suitable for clinical use.
+### Neural network classification
+
+Train a neural network in Pytorch for classification of the Breast cancer dataset.
+
+**Task 1.5**: Define an architecture of a neural network in Pytorch with these properties:
+* 3 linear layers with 15, 5 and 1 output
+* ReLU activation functions after the first two layers
+* Sigmoid activation function after the final layer
+* Binary Cross Entropy loss
+import torch
+import torch.nn as nn
+
+# Define network architecture
+class NNClassifier(nn.Module):
+    def __init__(self):
+        super(NNClassifier, self).__init__()
+        # define the layers in the network
+        self.fc1 = nn.Linear(2, 15)
+        self.fc2 = nn.Linear(15,5)
+        self.fc3 = nn.Linear(5, 1)
+        self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
+
+
+    def forward(self, x):
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        x = self.sigmoid(self.fc3(x))
+
+        return x
+
+net = NNClassifier()
+
+# Loss
+loss_function = nn.BCELoss()
+__Task 1.6__
+Complete the code below to train and evaluate the network. The dataset has been split for you into training and test set.
+
+Perform following:
+* convert training and test feature matrices and label vectors to Pytorch tensors
+* create an instance of the network
+* create a Stochastic Gradient Descent optimiser with a learning rate 0.2
+* perform training for 100 epochs
+* evaluate accuracy on test set
+* plot decision boundary as in Task 1.3.
+from sklearn.model_selection import train_test_split
+from sklearn.datasets import load_breast_cancer
+from sklearn.metrics import accuracy_score
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+import matplotlib.pyplot as plt
+
+X_train, X_test, y_train, y_test = train_test_split(X_pca, y, test_size=0.2, random_state=42)
+
+# Convert to Pytorch tensors
+X_train_torch = torch.tensor(X_train, dtype = torch.float32)
+y_train_torch = torch.tensor(y_train, dtype=torch.float32).view(-1, 1)
+X_test_torch = torch.tensor(X_test, dtype=torch.float32)
+y_test_torch = torch.tensor(y_test, dtype=torch.float32).view(-1, 1)
+
+
+# Instance of the network
+net = NNClassifier()
+
+# Optimizer
+optimizer = optim.SGD(net.parameters(), lr = 0.2)
+
+# recall loss function
+loss_function = nn.BCELoss()
+
+# Training
+epochs = 100
+for i in range(epochs):
+    optimizer.zero_grad()
+    outputs = net(X_train_torch)
+    loss = loss_function(outputs, y_train_torch)
+    loss.backward()
+    optimizer.step()
+
+# accuracy on test step
+net.eval()
+with torch.no_grad():
+  y_pred = net(X_test_torch)
+  y_pred_label = y_pred.ge(0.5).float()
+  acc = accuracy_score(y_test_torch.numpy(), y_pred_label.numpy())
+print('Test accuracy: ', np.round(acc,2))
+
+# Plot decision boundary
+# Create grid
+xx, yy = np.meshgrid(np.linspace(X_pca[:,0].min()-0.1,X_pca[:,0].max()+0.1,100),
+                     np.linspace(X_pca[:,1].min()-0.1,X_pca[:,1].max()+0.1,100))
+grid = np.stack([xx.flatten(), yy.flatten()]).T
+
+# Convert grid to torch tensor
+grid_torch = torch.tensor(grid, dtype=torch.float32)
+
+# Predict and plot labels for the feature space
+with torch.no_grad():
+    Z = net(grid_torch).ge(0.5).float()
+    Z = Z.view(xx.shape)
+
+# Plot
+plt.contourf(xx, yy, Z.numpy(), alpha=0.4)
+plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y, edgecolor='k', s=20)
+plt.title("Decision Boundary")
+plt.show()
+### Brain MRI
+
+The code below loads two images - T1 and T2 weighted MRI. In this question you will implement 2D Gaussian Mixture Model for segmentation of this multi-channel MRI.
+# only do this if you work on Google Colab
+# uncomment code below and run the cell
+# then upload files 'T1.png' and 'T2.png'
+
+# uncomment this
+from google.colab import files
+files.upload()
+import matplotlib.pyplot as plt
+
+# load  images
+T1 = plt.imread('T1.png')
+T2 = plt.imread('T2.png')
+
+# display images
+plt.figure(figsize = [10,4])
+plt.set_cmap('gray')
+plt.subplot(121)
+plt.imshow(T1)
+plt.title('T1', fontsize = 14)
+plt.subplot(122)
+plt.title('T2', fontsize = 14)
+plt.imshow(T2)
+**Task 2.1** Calculate and plot 2D histogram of the multi-channel MRI. *Hint: matplotlib package has a suitable function*
+import matplotlib.pyplot as plt
+mc_mri = np.dstack((T1,T2))
+
+# plot 2D histogram
+plt.hist2d(mc_mri[:,:,0].ravel(), mc_mri[:,:,1].ravel(), bins = 256, cmap = 'viridis')
+
+# set title and axis labels
+plt.colorbar()
+plt.title('2D histogram of Multi-channel MRI')
+plt.xlabel('T1 channel')
+plt.ylabel('T2 channel')
+plt.show()
+
+### GMM segmentation
+**Task 2.2** If you plotted the histogram correctly, you will see 5 intensity peaks. Create a Gaussian Mixture Model with 5 clusters. Perform GMM clustering using 2D feature space composed of these two images. Display the segmentation. Decide whether the segmentation worked by visual assessment.
+from sklearn.mixture import GaussianMixture
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Select model
+gmm = GaussianMixture(n_components=5, random_state=42)  # Gaussian Mixture Model with 5 clusters as stated above
+
+# Create feature matrix
+mc_mri = np.dstack((T1, T2))  # Stacking T1.png and T2.png
+features = mc_mri.reshape(-1, 2)  # Reshape for GMM (each row is a pixel, columns are T1 and T2 values)
+
+# Fit and predict
+gmm.fit(features)
+predicted_labels = gmm.predict(features)
+
+# Display segmentation
+segmented_image = predicted_labels.reshape(T1.shape)
+
+# Plotting the segmented image
+plt.figure(figsize=[6,6])
+plt.imshow(segmented_image, cmap='viridis')  # Using a colormap to differentiate segments easier for splitting later on
+plt.colorbar()
+plt.title('Segmented MRI Image')
+plt.show()
+
+**Task 2.3** Predict and display posterior probability maps for all classes. Create a plot with 5 subplots and display posterior probability map for one cluster in each subplot. Display a title with the name of the tissue represented by that propability map.
+# Predict probabilistic segmentations
+probabilities = gmm.predict_proba(features)
+
+# Plot all probability maps
+fig, axs = plt.subplots(1, 5, figsize=(20, 4))
+tissue_names = ["Tissue 1", "Tissue 2", "Tissue 3", "Tissue 4", "Tissue 5"]
+
+num = [0, 1, 2, 3, 4]
+for i, _ in enumerate(num):
+    probability_map = probabilities[:, i].reshape(T1.shape)
+    axs[i].imshow(probability_map, cmap='viridis')
+    axs[i].set_title(f'Probability Map for {tissue_names[i]}')
+    axs[i].axis('off')
+
+plt.show()
+**Task 2.4**: Predict likelihood function $p(y|\phi)$ for the intensity ranges of the two images. Display the likelihood next to the histogram (in a figure with two subplots) and compare. Is that what you expected? Try to reason why the likelihood might differ from the histogram. Which classes had PDFs with behaviour that was not expected?
+
+*Note: This is an advanced question expected only from students aiming at top marks, if too difficult move to the next question*
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.mixture import GaussianMixture
+
+
+# Assuming T1 and T2 are already loaded and mc_mri is created
+mc_mri = np.dstack((T1, T2))
+
+# Train GMM
+gmm = GaussianMixture(n_components=5, random_state=42)
+features = mc_mri.reshape(-1, 2)
+gmm.fit(features)
+
+# Compute the PDFs for each component across intensity ranges
+x, y = np.linspace(T1.min(), T1.max(), 256), np.linspace(T2.min(), T2.max(), 256)
+X, Y = np.meshgrid(x, y)
+XX = np.array([X.ravel(), Y.ravel()]).T
+
+log_liklihood = gmm.score_samples(XX)
+liklihood = np.exp(log_liklihood).reshape(X.shape)
+
+
+# Plot the histogram and PDFs
+fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+
+# Histogram plot
+axs[0].hist2d(mc_mri[:, :, 0].ravel(), mc_mri[:, :, 1].ravel(), bins=256, cmap='viridis')
+axs[0].set_title('2D Histogram of Multi-channel MRI')
+axs[0].set_xlabel('T1 Channel')
+axs[0].set_ylabel('T2 Channel')
+
+# PDFs
+axs[1].imshow(liklihood, extent=[x.min(), x.max(), y.min(), y.max()], origin='lower', cmap='viridis')
+axs[1].set_title('Likelihood Function p(y|φ)')
+axs[1].set_xlabel('T1 Channel')
+axs[1].set_ylabel('T2 Channel')
+
+plt.show()
+__Answer:__ The liklihood function smooth's contour contrasts and elongates the resulting clusters which is expected due to the nature of the Gaussian Mixture model, this can be seen in the clusters at the very top and the very right. Some regions in the liklihood function appear more prominent compared to the histogram this indicates that overfitting could be present in certain clusters, furthermore there is unexpected PDF behaviour in the remaining 3 clusters this could be where GMM has assigned high propabilities possibly due to overfitting or the n_components not matching the parameters of the true structure in the data.
+## Random forest from scratch
+
+In the tutorials we created our own Decision Tree and Bagging classification methods which we implemented in `DecisionTree.py` and `Bagging.py`. Random forest performs bootstrapping and aggregation just like bagging, but on top of that it also performs random selection of features at each node in the decision tree. In this question you will extend the Decision Tree and Bagging functions to create your own Random Forest.
+
+**Task 3.1**  In the box below write what is the effect selecting a random subset of features at each node in terms of reducing the bias or variance of the model and why.
+__Answer:__ Random Forests uses random feature selection at each node to reduce model variance and prevent overfitting by generating varied trees that are less susceptible to being impacted by noise. This ensures that individual trees are less correlated which minimises the impact of noise, leading to a greater generalisation without increase in bias.
+### Getting started
+
+The first thing we need to do is import our original `DecisionTree` and `Bagging` modules. We can call the functions from these imported modules using the ```DT.``` or ```BG.``` syntax. Run the code bellow to import the modules.
+import DecisionTree as DT
+import Bagging as BG
+import numpy as np
+import sys
+Training and testing random forests behaves very similarly to that of bagged ensembles of decision trees, with the exception that when optimising for the best split of the data at each node in function `get_best_split`, only a subset of the features is considered. To do that we will write a new fuction `get_feature_subset` where the **maximum proportion of features** in each node is controlled by the variable `max_f`.
+
+We will also need to modify several other functions to support the new functionality. The functions that don't need to be modified can be called directly from the imported modules using `DT.` and `BG.` Think very carefully which versions of the functions you need to use to avoid mistakes and loosing marks.
+
+### Dataset
+
+We will test the new functions on the simulated classification dataset. We will create a two-class problem, creating a dataset with 1000 samples and 10 features, of which 3 will be informative (necessary for the classification) and none redundant. Run the code bellow to create the dataset.
+
+More info on the simulated dataset here: https://scikit-learn.org/stable/modules/generated/sklearn.datasets.make_classification.html#sklearn.datasets.make_classification
+import sklearn.datasets as datasets
+
+# Build a classification task using 3 informative features
+X, y = datasets.make_classification(n_samples=1000, n_features=10, n_informative=3, n_classes=2)
+
+print('Number of samples: ', X.shape[0])
+print('Number of features: ', X.shape[1])
+print('Size of the label vector: ', y.shape)
+### Select subsets of features
+
+**Task 3.2** Write a function `get_feature_subset` which, given a number of features `n_features` and the proportion of features to be sampled `max_f`, will return an array `indices`, indicating which features have been selected. This is achieved by random sampling *without replacement*. Complete the code bellow to do that.
+# Complete the code for the function
+def get_feature_subset(n_features,max_f):
+    """
+        Returns indices of a random subset of features
+        input:
+            n_features: number of features
+            max_f: the proportion of features to be selected for each node
+
+        output:
+            indices: list of selected features
+    """
+
+    # calculate the number of selected features (we were given a proportion of all features (max_f))
+    n_selected = int(n_features * max_f)
+    # generate indices of randomly selected features (without replacement)
+    indices = indices = np.random.choice(n_features, n_selected, replace=False)
+
+    return indices
+
+# Test function
+ind = get_feature_subset(X.shape[1],0.3)
+print(ind)
+### Update get_best_split
+
+**Task 3.3**:  Now edit function ```get_best_split``` below to:
+1. Call `get_feature_subset` and have it return a random subset features with proportion `max_f`, but only if `max_f` is less than 1.0
+2. Edit the outer loop (variable `index`) such that it loops only over this subset of features
+def get_best_split(dataset, max_f=1.0):
+    """
+        Search through all attributes and all possible thresholds to find the best split for the data
+        input:
+            dataset = array (n_samples,n_features+1)
+                    rows are examples
+                    last column indicates class membership
+                    remaining columns reflect features/attributes of data
+            max_f: the proportion of features available for each node
+
+        output:
+            dict containing: 1) 'index' : index of feature used for splittling on
+                             2)  'value': value of threshold split on
+                             3) 'branches': tuple of data arrays reflecting the optimal split into left and right branches
+
+    """
+    # Extract number of features
+    n_features = dataset.shape[1]-1
+
+#### AMEND CODE HERE ###
+    # get random feature indices
+    if max_f < 1.0:
+        features = get_feature_subset(n_features, max_f)
+    else:
+        features=np.arange(n_features)
+    print('Selected features:', features)
+
+    # identify which labels we have
+    class_values=np.unique(dataset[:,-1])
+
+    # initalise optimal values prior to refinment
+    best_cost=sys.float_info.max # initialise to max float
+    best_value=sys.float_info.max # initialise to max float
+    best_index= n_features + 1 # initialise as greater than total number of features
+    best_split=tuple() # the best_split variable should contain the output of test_split that corresponds to the optimal cost
+
+
+#### AMEND CODE HERE ###
+    # iterate over all selected features/attributes (columns of dataset)
+    for index in features:
+
+        # Trialling splits defined by each row value for this attribute
+        for r_index,row in enumerate(dataset):
+            branches=DT.test_split(index, row[index], dataset)
+
+            cost=DT.split_cost(branches,class_values)
+            if cost < best_cost:
+                best_cost=cost
+                best_split=branches
+                best_index=index
+                best_value=row[index]
+
+
+    return {'index':best_index, 'value':best_value, 'branches':best_split}
+
+# Test function
+dataset = np.concatenate([X,y.reshape(-1,1)],axis=1)
+ans = get_best_split(dataset, 0.3)
+print('Best index: ',ans['index'])
+print('Best value: ',round(ans['value'],2))
+### Update remaining functions
+
+Now we need to make sure that the argument `max_f` is passed to all functions that need it.
+
+The function `run_split` in the cell below is already updated. Run the code in this cell.
+def run_split(node, max_depth, min_size, depth, max_f=1):
+
+    """
+        Recursively splits nodes until termination criterion is met
+        input:
+            node = dict containing: 1) 'index' : index of feature used for splittling on
+                             2)  'value': value of threshold split on
+                             3) 'branches': tuple of data arrays reflecting the optimal split into left and right branches
+            max_depth: int determining max allowable depth for the tree
+            min_size : int determining minimum number of examples allowed for any branch
+            depth: current depth of tree
+            max_f: the proportion of features available for each node
+
+
+        Output:
+            node: is returned by value and returns a recursion of dicts representing the structure of the whole tree
+    """
+    left, right = node['branches']
+    del(node['branches'])
+    # check for whether all data has been assigned to one branch; if so assign both branches the same label
+    if left.shape[0]==0 :
+        node['left'] = node['right'] = DT.to_terminal(right)
+        return
+    if right.shape[0]==0 :
+        node['left'] = node['right'] = DT.to_terminal(left)
+        return
+    # check for max depth; if exceeded then estimate labels for both branches
+    if max_depth != None and depth >= max_depth:
+        node['left'], node['right'] = DT.to_terminal(left), DT.to_terminal(right)
+        return
+    # process left child
+        # in first instance check whether the number of examples reaching the left node are less than the allowed limit
+        # if so assign as a terminal node, if not then split again
+    if len(left) <= min_size:
+        node['left'] = DT.to_terminal(left)
+    else:
+        node['left'] = get_best_split(left,max_f)
+        run_split(node['left'], max_depth, min_size, depth+1,max_f)
+
+    # process right child as for left
+    if len(right) <= min_size:
+        node['right'] = DT.to_terminal(right)
+    else:
+        node['right'] = get_best_split(right,max_f)
+        run_split(node['right'], max_depth, min_size, depth+1,max_f)
+**Task 3.4**: Your task is now to edit the function `build_tree`. To do that:  
+* include an optional parameter `max_f`, which allows the user to define a maximum proportion of features to be sampled from at each node
+
+* supply `max_f` to all functions which call `get_best_split` (including itself).
+
+Edit each line of code where this is the case.
+def build_tree(train, max_depth=None, min_size=1, max_f = 1):
+    """
+    Builds and returns final decision tree
+
+    input:
+        train : training data array (n_samples,n_features+1)
+        max_depth: user defined max tree depth (int)
+        min_size: user defined minimum number of examples per tree tree depth (int)
+        max_f: the proportion of features available for each node
+    """
+    # create a root node split by calling get_best_split on the full training set
+    root = get_best_split(train, max_f)
+    # now build the tree using run_split
+    run_split(root, max_depth, min_size, 1, max_f)
+    return root
+### Create a Forest
+
+Now what remains is to create our forest of trees.
+
+Random Forests are exactly the same as bagging _EXCEPT_ that as well as creating bootstrapped samples of examples from the dataset they also randomly sample subsets of features at each node. This means we can continue to use the functions we built for our `Bagging` method but with small edits to ensure that they pass the user defined parameter `max_f` to our new `DecisionTree` functions
+
+**Task 3.5** Edit function `create_bagged_ensemble` to support the new user defined argument `max_f`
+
+*Hint:* here you will need to call the build_tree function you defined above.
+def create_bagged_ensemble(data, max_depth, min_size, n_trees,max_f = 1, random_state=42): # 1 mark
+
+    ''' Create a bagged ensemble of decision trees
+    input:
+        data: (n_samples,n_features+1) data array
+        max_depth: max depth of trees
+        min_size: minimum number of samples allowed in tree leaf nodes
+        n_trees: total number of trees in the ensemble
+        random_state: fixes random seed
+    output:
+        bagged_ensemble: list of decision trees that make up the bagged ensemble
+    '''
+
+    bagged_ensemble=[]
+    np.random.seed(random_state)
+
+    for i in range(n_trees):
+        print('building tree', i)
+        sample = BG.bootstrap_sample(data, random_state + i)
+        tree = build_tree(sample, max_depth, min_size, max_f)
+        bagged_ensemble.append(tree)
+
+    return bagged_ensemble
+### Evaluate
+
+The code below creates a training and test dataset. Run the code.
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
+dataset_train=np.concatenate((X_train,np.expand_dims(y_train,axis=1)),axis=1)
+dataset_test=np.concatenate((X_test,np.expand_dims(y_test,axis=1)),axis=1)
+We will now evaluate the performance of our new Random Forest and compare it to the performance of a single decision tree. To calculate accuracy, we will predict the labels of the test set using the unchanged funcions `predict` that are already implemented in `Bagging` and `DecisionTree` modules.
+
+**Task 3.6**  Build a single decision tree using your newly implemented function and set the parameters as `max_depth=3`, `min_size=1`, `max_f=1.0`. Report the accuracy on the test set.
+# Build the tree
+tree = build_tree( dataset_train, max_depth = 3, min_size = 1, max_f= 1.0)
+
+# Predict on test set
+predictions = DT.predict(tree, dataset_test)
+
+# Calculate and print accuracy
+print('Accuracy:', round(DT.score(y_test, predictions), 2))
+
+**Task 3.7**  Build and train your newly implemeted Random Forest with parameters `max_depth=3`, `min_size=1`, `max_f=0.3`, `n_trees=10`. Report the accuracy on the test set.
+
+*Note: This might take a while to run.*
+# Build the forest
+forest = create_bagged_ensemble(dataset_train, max_depth = 3, min_size = 1, n_trees = 10, max_f = 0.3)
+
+# Predict on test set
+rf_predictions = BG.bagging_predict(forest, dataset_test)
+
+# Calculate and print accuracy
+print('Random Forest Accuracy:', round(DT.score(y_test, rf_predictions), 2))
+## Detecting cancer from histopatological images
+
+In this question we will implement a __CNN to classify histopatological images for presence of cancer__. More details about the PatchCamelyon dataset can be found here https://github.com/basveeling/pcam.
+<img src="pcam.jpg" style="max-width:100%; width: 100%; max-width: none">
+
+### Load the dataset
+
+For this question we recommend you use **google colab**. Watch the 'Instructions for Colab' video on KEATS if you have not done so, and make sure to **change colab runtime to GPU** else it will take too long to train.
+
+To upload the data to colab, complete the following steps:
+
+1. First mount your drive by running the below cell and following the 'sign in' steps.
+from google.colab import drive
+import os
+
+drive.mount('/content/drive')
+2.  Upload the data set `'histological_data.npz'` to your Google drive. Edit the path below to define where you have put the data relative to the top level of your drive. Then run the cell to load the dataset.
+# edit this path to match where you put your data
+path='Colab Notebooks/assignment 2/histological_data.npz'
+
+full_path=os.path.join('/content/drive/My Drive/', path)
+
+# Load dataset from .npz file
+import numpy as np
+data = np.load(full_path)
+# in case you want to check the data locally
+# data = np.load('histological_data.npz')
+3. Now Run the code below to check the import has worked and print out the train and test dataset dimensions. You should find the training data has shape (1500,96,96) and the test has shape (150,96,96). This means that your images are 2D with dimensions 96 x 96
+# Train images and labels
+X_train = data['X_train']
+y_train = data['y_train'].astype('int')
+
+# Test images and labels
+X_test  = data['X_test']
+y_test  = data['y_test'].astype('int')
+
+# Print shapes here
+print('Training data - images:', X_train.shape)
+print('Training data - labels:',y_train.shape)
+print('Test data - images:',X_test.shape)
+print('Test data - labels:',y_test.shape)
+Let's now plot a few example images. Note that label 1 means presence of cancerous cells.
+import matplotlib.pyplot as plt
+
+id_images = [4, 5, 6, 7]
+
+plt.figure(figsize=(15, 8))
+for i in np.arange(0, 4):
+    plt.subplot(1, 4, i+1)
+    plt.imshow(X_train[id_images[i], :, :], cmap='gray')
+    plt.title('label: ' + str(y_train[id_images[i]]))
+Finally we need to reshape the data to fit the dimensions expected by pytorch and convert to torch tensors
+import torch
+
+X_train_torch=torch.from_numpy(np.expand_dims(X_train,axis=1)).to(torch.float)
+X_test_torch=torch.from_numpy(np.expand_dims(X_test,axis=1)).to(torch.float)
+
+y_train_torch=torch.from_numpy(y_train).to(torch.long)
+y_test_torch=torch.from_numpy(y_test).to(torch.long)
+
+print('Training data - newshape:', X_train_torch.shape)
+print('Training data - labels:',y_train_torch.shape)
+print('Test data - newshape:',X_test_torch.shape)
+print('Test data - labels:',y_test_torch.shape)
+### Build CNN for classification
+
+Using what you have learnt in the lectures and tutorial, create a CNN network class that performs classification. The class structure has been created for you.
+
+**Task 4.1** Define the convolutional and linear layers for your network by completing those lines in the class constructor
+
+4.1.1. create the convolutional layers
+ - layer 1 should learn 16 filters kernel size 5
+ - layer 2 should learn 32 filters kernel size 5
+
+
+4.1.2. implement 2 fully connected linear layers
+ - layer 1 should learn 100 neurons
+ - layer 2 (the classification layer) should learn 2 outputs
+
+4.1.3. implement the forward function
+  - implement first convolutional layer with relu activation
+  - implenment second convolutional layer with relu activation
+  - flatten output prior to linear layer
+  - implement linear layer one
+  - implement linear layer two
+  
+ *Note: We have learned that binary classification can have one output and uses BCE loss, but two outputs with CE loss is a valid alternative*
+import torch.nn as nn
+import torch.nn.functional as F
+
+# will allow network to run on GPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+class Net(nn.Module):
+    def __init__(self):
+        super().__init__()
+        # 4.1.1 create a convolutional layer with kernel size 5 that learns 16 filters
+        self.conv1 = nn.Conv2d(in_channels= 1, out_channels= 16, kernel_size= 5 )
+
+        # maxpool implemented for you
+        self.pool = nn.MaxPool2d(2, 2)
+
+        # 4.1.1 create a convolutional layer with kernel size 5 that learns 32 filters
+        self.conv2 = nn.Conv2d(in_channels= 16, out_channels= 32, kernel_size= 5)
+
+        # 4.1.2 create a linear layer that takes the flattened output from conv2 and learns 100 neuros
+        # sizeflat = 32 * 21 * 21
+        dum_tensor = torch.randn(1,1, 96,96)
+        dum_tensor = self.pool(F.relu(self.conv1(dum_tensor)))
+        dum_tensor = self.pool(F.relu(self.conv2(dum_tensor)))
+        sizeflat = dum_tensor.view(-1).size(0)
+        # print(np.array(sizeflat))
+
+        self.fc1 = nn.Linear(sizeflat, 100) #hint: you need to work out the dimension of the flattened output of conv2 ( i.e. you can print it)
+
+
+        # 4.1.2 create a linear layer that takes the output from fc2 and learns 2 output neurons
+        self.fc2 = nn.Linear(100, 2)
+
+
+    def forward(self, x):
+        # 4.1.3 implement forward pass
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(-1, self.num_flat_features(x))
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+
+        return x
+
+
+    def num_flat_features(self,x):
+      size = x.size()[1:]
+      num_features = 1
+      for s in size:
+        num_features *= s
+      return num_features
+
+
+net = Net().to(device)
+**Task 4.2** Define a cross-entropy loss function. Optimiser with a suitable learning rate has been set up for you.
+# loss
+loss_fun = nn.CrossEntropyLoss().to(device)
+# loss_fun = loss_fun.to(device)
+
+# optimiser
+optimizer = torch.optim.SGD(net.parameters(), lr=0.005, momentum=0.9)
+**Task 4.3** Train your network on the training set and validate it on the test set. To do that
+
+- 4.3.1: Complete the training loop
+- 4.3.2: Complete the code to calculate validation loss and accuracy on the test set
+- 4.3.3: Plot the model performance over epochs **for test set only**
+
+
+*__Hint 1:__ Watch for improvement in the training loss to see that the network is training correctly. It may take time for training/validation accuracy to start improving, so be patient. Make sure you use GPU runtime on Colab, otherwise it will be too slow to see improvement.*
+
+*__Hint 2:__ You can see the training loss oscilating towards the end of the  training. This is not to worry about - it shows that the learning rate is still a bit too high. We keep it that way so be able to start seeing improvement at the beginning of the training.*
+
+*__Note:__ We only use training and validation in this exercise for simplicity. Use __training set__ for training and __test set__ for validation.*
+from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
+import numpy as np
+
+epochs = 500
+accuracy = []
+val_loss = []
+
+for epoch in range(epochs):
+    net.train()
+    # Send your training data to GPU device
+    data = X_train_torch.to(device)
+    label = y_train_torch.to(device)
+
+    # 4.3.1: Complete the training loop
+    optimizer.zero_grad()
+    outputs = net(data.to(device))
+
+    # find loss
+    err = loss_fun(outputs, label)
+    err.backward()
+    optimizer.step()
+
+
+    # Validation: evaluate on test set every 10 iterations
+    if epoch % 10 == 0:
+      net.eval()
+
+      # 4.3.2: Calculate validation loss and accuracy (use test set)
+      # send validation to GPU
+      val_data = X_test_torch.to(device)
+      val_label = y_test_torch.to(device)
+
+      # predict validation outputs
+      val_outputs = net(val_data)
+
+      # calculate validation error
+      val_err = loss_fun(val_outputs, val_label).item()
+      val_loss.append(val_err)
+      val_predict = torch.argmax(val_outputs, dim = 1)
+
+      # calculate accuracy
+      acc = accuracy_score(val_label.cpu().numpy(), val_predict.cpu().numpy())
+      accuracy.append(acc)
+
+
+      # print out training and validation loss and accuracy
+      print('Epoch {:3d}/{:3d} ==> Train loss: {:.4f}, Val Loss: {:.4f}, Val accuracy: {:.4f}'. format(epoch, epochs, err ,val_err, accuracy[-1]))
+# end of training loop
+
+# Print the highest validation accuracy that we achieved during training
+print(['Best val error: ', np.max(accuracy)])
+
+net.eval()
+
+# send to GPU
+val_data_test = X_test_torch.to(device)
+val_label_test = y_test_torch.to(device)
+
+
+# predict test outputs
+val_outputs_final = net(val_data_test)
+
+# find final test loss
+val_loss_final = loss_fun(val_outputs_final, val_label_test).item()
+
+# final test accuracy
+val_predict_final = torch.argmax(val_outputs_final, dim = 1)
+final_val_acc = accuracy_score(val_label_test.cpu().numpy(), val_predict_final.cpu().numpy())
+print('Final Test Loss: {:.4f}, Final Test Accuracy: {:.4f}'.format(val_loss_final, final_val_acc))
+
+# 4.3.3: Plot the validation accuracy over iterations
+x_axis = np.arange(0, epochs,10)
+plt.plot(x_axis, accuracy)
+plt.title('Validation Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.show()
